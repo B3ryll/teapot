@@ -1,0 +1,3 @@
+[submodule "external/libcsv"]
+	path = external/libcsv
+	url = https://github.com/rgamble/libcsv/
