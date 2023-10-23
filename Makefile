@@ -7,10 +7,11 @@ RM     = rm -f
 
 PREFIX = ${HOME}/usr/local
 
-default: tomato
+default: teapot
 
-tomato: teapot.c config.h libcsv.a
-	$(CC) $(CFLAG) -o ${APP} teapot.c libcsv.a -I./include $(CLIBS)
+teapot: teapot.c config.h libcsv.a
+	$(CC) $(CFLAG) -o ${APP} teapot.c store.c libcsv.a \
+							-I ./include $(CLIBS)
 
 config.h:
 	cp config.def.h $@
