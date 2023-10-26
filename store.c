@@ -1,7 +1,7 @@
-// ==========================================================
+// ===========================================================
 //  ./store.c
 //
-// ==========================================================
+// ===========================================================
 
 #include "store.h"
 
@@ -23,9 +23,15 @@
 
 // --------------------------------------------------------- //
 
+struct habit_linked_list
+{
+    habit                     value;
+    struct habit_linked_list* next;
+};
+
 static int last_habit_id (store st, allocator alloc);
 
-char* habit_serialize (habit, val, allocator alloc);
+char* habit_serialize (habit val, allocator alloc);
 
 static int is_space (unsigned char c);
 static int is_term  (unsigned char c);
@@ -59,7 +65,7 @@ char* habit_serialize (habit val, allocator alloc)
         + strlen(val.metric_short)
         + 11; 
     // 5 = (',' x 4) + ('\"' x 6) + '\0'
-      
+
     char* serial = (*alloc.allocate)(out_str_len);
     sprintf(
         serial, "%04x,\"%s\",%d,\"%s\",\"%s\"",
@@ -71,6 +77,33 @@ char* habit_serialize (habit val, allocator alloc)
     );
 
     return serial;
+}
+
+static inline void free_habit_linked_list_item (
+    struct habit_linked_list* val,
+    allocator alloc
+) {
+    (*alloc.free) (val->value.name);
+    (*alloc.free) (val->value.metric);
+    (*alloc.free) (val->value.metric_short);
+
+    (*alloc.free) (val);
+}
+
+static inline void free_habit_linked_list (
+    struct habit_linked_list* list,
+    allocator alloc
+) {
+    
+    struct habit_linked_list* current = list;
+    do
+    {
+        struct habit_linked_list* to_free = current;
+        current                           = current->next;
+
+        free_habit_linked_list_item (to_free, alloc);
+
+    } while (current != NULL);
 }
 
 // --------------------------------------------------------- //
@@ -109,11 +142,6 @@ static inline char* concat_path (
 int store_init (store st, allocator alloc)
 {
     struct stat store_stat = {0};
-    
-    fprintf (
-        stderr, "(store path => %s)\n",
-        st.dirpath
-    );
     if ((stat(st.dirpath, &store_stat)) != -1)
     {
         mkdir(st.dirpath, 0700);
@@ -272,10 +300,23 @@ static int last_habit_id (store st, allocator alloc)
 
             exit (EXIT_FAILURE);
         }
-    }
+   }
 
+    csv_fini (
+        &parser,
+        habit_id_field_callback, 
+        habit_id_line_callback,
+        &ctx  
+    );
+
+    csv_free (&parser);
     (*alloc.free)(habit_db_path);
-    fclose(file);
+
+    err = fclose(file);
+    if (err != 0)
+    {
+        // @TODO : handle error properly
+    }
 
     return ctx.latest_id;
 }
@@ -303,4 +344,291 @@ int store_habit (store st, habit val, allocator alloc)
 
 // --------------------------------------------------------- //
 
+typedef struct
+{
+    struct habit_linked_list* list; 
+    short int                 current_field;
+    struct habit_linked_list* current;
+    struct habit_linked_list* latest_allocated;
+    allocator                 alloc;
 
+} habit_filter_ctx;
+
+static void habit_filter_field_callback (
+    void*  data,
+    size_t len,
+    void*  out
+) {
+    habit_filter_ctx* ctx = out;
+
+    switch (ctx->current_field++)
+    {
+    case 0:
+        ctx->current->value.id = strtol (data, NULL, 16);
+        break;
+
+    case 1:
+        ctx->current->value.name =
+            (*ctx->alloc.allocate) (strlen (data) + 1);
+
+        strcpy (ctx->current->value.name, data);
+        break;
+
+    case 2:
+        ctx->current->value.type = strtol (data, NULL, 10);
+        break;
+
+    case 3:
+        ctx->current->value.metric =
+            (*ctx->alloc.allocate) (strlen (data) + 1);
+
+        strcpy (ctx->current->value.metric, data);
+        break;
+
+    case 4:
+        ctx->current->value.metric_short =
+            (*ctx->alloc.allocate) (strlen (data) + 1);
+
+        strcpy (ctx->current->value.metric_short, data);
+        break;
+    
+    default:
+        // @TODO: handle exception condition
+        
+        fprintf (
+            stderr,
+            "habit callback called with undefined field: %d",
+            ctx->current_field - 1
+        );
+    }
+}
+
+static void habit_filter_line_callback (
+    int   end,    
+    void* out
+) {
+    habit_filter_ctx* ctx = out;
+
+    if (ctx->current == NULL)
+        return;
+
+    if (ctx->list == NULL)
+        return;
+
+    struct habit_linked_list* item =
+        (*ctx->alloc.allocate) (sizeof (struct habit_linked_list));
+
+    ctx->latest_allocated = ctx->current;
+
+    ctx->current->next = item;
+    ctx->current       = item;
+
+    ctx->current_field = 0;
+}
+
+void persist_habit_list (
+    char* filepath,
+    struct habit_linked_list* list,
+    allocator alloc
+) {
+    FILE* file = fopen (filepath, "wb");
+    if (file == NULL)
+    {
+        fprintf (
+            stderr, "failed to open file %s\n",
+            filepath
+        );
+
+        exit (EXIT_FAILURE);
+    }
+
+    struct habit_linked_list* current = list;
+    do
+    {
+        char* serial = habit_serialize (
+            current->value, alloc
+        );
+        
+        fprintf (file, "%s\n", serial);
+        (*alloc.free) (serial);
+
+        current = current->next;
+
+    } while (current != NULL);
+}
+
+// @debug
+void print_habit_linked_list (struct habit_linked_list list)
+{
+    struct habit_linked_list* current = &list; 
+    do
+    {
+        fprintf (
+            stderr, "name pointer => %x\n",
+            current->value.name
+        ); 
+        fprintf (
+            stderr, "name => %s\n",
+            current->value.name
+        ); 
+        fprintf (
+            stderr, "metric pointer => %x\n",
+            current->value.metric
+        ); 
+        fprintf (
+            stderr, "short metric pointer => %x\n",
+            current->value.metric_short
+        );
+
+        current = current->next;
+    } while (current != NULL);
+}
+
+struct habit_linked_list* delete_habit_from_list (
+    struct habit_linked_list* list,
+    short int id,
+    allocator alloc   
+) {
+    struct habit_linked_list* previous = NULL;
+    struct habit_linked_list* current  = list;
+
+    struct habit_linked_list* first    = NULL;
+
+    do
+    {
+        struct habit_linked_list* next = current->next;
+        
+        fprintf (
+            stderr, "current habit name: %s\n",
+            current->value.name
+        );
+
+        if (current->value.id == id)
+        {
+            fprintf (stderr, "freeing memory...\n");
+            free_habit_linked_list_item (current, alloc);
+        }
+        else
+        {
+            if (first == NULL)
+                first = current;
+
+            previous = current;
+        }
+
+        fprintf (stderr, "setting current...\n");
+        current = next;
+
+        if (previous)
+        {
+            fprintf (stderr, "setting previous's next...\n");
+            previous->next = next;
+        }
+        fprintf (stderr, "next iteration...\n");
+    } while (current != NULL);
+
+    return first;
+}
+
+int remove_habit (store st, short int id, allocator alloc)
+{
+    struct csv_parser parser;
+    
+    unsigned char options = CSV_STRICT|CSV_APPEND_NULL;
+    int err = csv_init(&parser, options);
+    if (err != 0)
+    {
+        fprintf (stderr, "failed to initialize parser\n");
+        exit (EXIT_FAILURE);
+    }
+    
+    csv_set_space_func (&parser, is_space);
+    csv_set_term_func  (&parser, is_term);
+    
+    char* habit_db_path = concat_path (
+       (char*) st.dirpath, "habit_data.csv", alloc
+    );
+    if (habit_db_path == NULL)
+    {
+        fprintf (
+            stderr, "failed to allocate path string",
+            habit_db_path
+        );
+
+        exit (EXIT_FAILURE);
+    }
+    
+    FILE* file = fopen(habit_db_path, "rb");
+    if (file == NULL)
+    {
+        fprintf (
+            stderr, "failed to open file %s\n",
+            habit_db_path
+        );
+
+        (*alloc.free)(habit_db_path);
+        exit (EXIT_FAILURE);
+    }
+    
+    struct habit_linked_list* item =
+        (*alloc.allocate) (sizeof (struct habit_linked_list));
+
+    habit_filter_ctx ctx = {
+        .list          = item,
+        
+        .current_field = 0,
+        .current       = item,
+
+        .alloc         = alloc,
+    };
+    
+    char   buff [BUFF_SIZE];
+    size_t read_bytes;
+    
+    while ((read_bytes = fread (buff, 1, BUFF_SIZE, file)) > 0)
+    {
+        int result = csv_parse (
+            &parser,
+            buff,
+            read_bytes,
+            habit_filter_field_callback,
+            habit_filter_line_callback,
+            &ctx
+        );
+        if (result != read_bytes)
+        {
+            fprintf (
+                stderr, "failed to parse csv file: %s\n",
+                habit_db_path
+            );
+
+            (*alloc.free) (habit_db_path);
+            fclose (file);
+
+            exit (EXIT_FAILURE);
+        }
+    }
+    
+    csv_fini (
+        &parser,
+        habit_id_field_callback, 
+        habit_id_line_callback,
+        &ctx
+    );
+    csv_free (&parser);
+    fclose(file);
+
+    (*alloc.free) (ctx.latest_allocated->next);
+    ctx.latest_allocated->next = NULL;
+   
+    ctx.list = delete_habit_from_list (ctx.list, id, alloc);
+    fprintf (stderr, "removed target habit...\n");
+
+    // print_habit_linked_list (*ctx.list);
+    persist_habit_list (habit_db_path, ctx.list, alloc);
+    
+    (*alloc.free) (habit_db_path);
+    free_habit_linked_list (ctx.list, ctx.alloc);
+
+    return 0;
+}

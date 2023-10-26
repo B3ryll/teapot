@@ -11,10 +11,8 @@
 #ifndef _STORE_H
 #define _STORE_H
 
-// ------------------------------------------------------
+// --------------------------------------------------------- //
 //  base definitions
-
-#define HABIT_ID_LENGTH 5
 
 enum
 {
@@ -49,7 +47,7 @@ struct store
 };
 typedef struct store store;
 
-// ------------------------------------------------------
+// --------------------------------------------------------- //
 //  util definitions
 
 struct allocator 
@@ -59,18 +57,18 @@ struct allocator
 };
 typedef struct allocator allocator;
 
-// ------------------------------------------------------
+// --------------------------------------------------------- //
 //   habit persistence api
 
 int store_init (store st, allocator alloc);
 
 int store_habit  (store st, habit val, allocator alloc);
 int update_habit (store st, habit val, allocator alloc);
-int remove_habit (store st, habit val, allocator alloc);
+int remove_habit (store st, short int id, allocator alloc);
 
 habit* query_habit (store st, habit val, allocator alloc);
 
-// -----------------------------------------------------
+// --------------------------------------------------------- //
 //  habit entries persistence api
 
 // @ TODO

@@ -1,4 +1,4 @@
-// ================================================== //
+// ======================================================== //
 
 + [ ] write code base to test data persistence
 
@@ -6,9 +6,9 @@
     + [x] implement method to initialize the habit database
     + [ ] imlpement method to query habit by id
     + [x] implement method to create new habit
-    + [ ] implement method to delete existing habits
+    + [x] implement method to delete existing habits
     + [ ] implement method to modify existing habits
 
 + [ ] write basic command line arguments and program commands
 
-// ================================================== //
+// ======================================================== //
