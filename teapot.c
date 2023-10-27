@@ -25,16 +25,10 @@ int main (int argc, char* argv[])
         .dirpath = "./test/.res", 
     };
 
-    habit val =
-    {
-        .name   = "Ler mangas",
-        .type   = HABIT_TYPE_NUMBER,
+    habit query = {.id = 9};
+    habit* res  = query_habit (st, query, alloc);
 
-        .metric       = "páginas lidas",
-        .metric_short = "pag",
-    };
-
-    store_habit (st, val, alloc);
+    fprintf (stderr, "name of the habit => %s\n", res->metric);
 
     return 0;
 }
