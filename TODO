@@ -10,6 +10,10 @@
     + [x] implement method to modify existing habits
 
 + [ ] create a method for recording daily habits
+    + [ ] create a method to record daily habit entries
+    + [ ] write procedure to unset habit history records
+    + [ ] implement a method to read habit history
+    + [ ] impleenet a procedure to flush daily habit data file
 
 + [ ] write basic command line arguments and program commands
 
